@@ -5,12 +5,14 @@
 #   -Launch            : `claude-focus:<hwnd>[?tab&title]` URI; empty => non-clickable toast
 #   -AppId             : registered AppUserModelId (controls the toast's name/icon)
 #   -Logo              : path to the circular app-logo-override image
+#   -Sound             : ms-winsoundevent:* URI to play; empty => silent toast
 param(
     [Parameter(Mandatory)][string]$Title,
     [Parameter(Mandatory)][string]$Message,
     [Parameter()][AllowEmptyString()][string]$Launch = '',
     [Parameter(Mandatory)][string]$AppId,
-    [Parameter(Mandatory)][string]$Logo
+    [Parameter(Mandatory)][string]$Logo,
+    [Parameter()][AllowEmptyString()][string]$Sound = 'ms-winsoundevent:Notification.Default'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -33,6 +35,15 @@ else {
     $toastAttrs = " launch=`"$launchXml`" activationType=`"protocol`""
 }
 
+# Empty sound => silent toast; otherwise play the given ms-winsoundevent:* URI.
+if ([string]::IsNullOrEmpty($Sound)) {
+    $audioXml = '<audio silent="true"/>'
+}
+else {
+    $soundXml = [System.Security.SecurityElement]::Escape($Sound)
+    $audioXml = "<audio src=`"$soundXml`"/>"
+}
+
 $xml = @"
 <toast$toastAttrs>
   <visual>
@@ -42,6 +53,7 @@ $xml = @"
       <image placement="appLogoOverride" hint-crop="circle" src="$logoXml"/>
     </binding>
   </visual>
+  $audioXml
 </toast>
 "@
 

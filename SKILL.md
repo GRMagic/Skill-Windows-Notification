@@ -2,7 +2,7 @@
 name: windows-notification
 description: Show a native Windows desktop notification (toast) from PowerShell. Use whenever the user asks to be notified, pinged, or alerted when something happens — e.g. "me avise quando os checks passarem", "show me a notification when the build finishes", "ping me when X completes", "notifica quando terminar", "send a Windows notification". Also use when the user explicitly asks to display a notification right now.
 disable-model-invocation: false
-allowed-tools: PowerShell(& "$env:USERPROFILE\.claude\skills\windows-notification\notify.ps1":*)
+allowed-tools: PowerShell(& "${CLAUDE_SKILL_DIR}\notify.ps1":*)
 ---
 
 # Windows Notification
@@ -13,10 +13,17 @@ Claude logo. Clicking the toast brings the originating terminal window back to t
 Run it with the **PowerShell tool** (pwsh), never the Bash tool:
 
 ```powershell
-& "$env:USERPROFILE\.claude\skills\windows-notification\notify.ps1" "TITLE HERE" "MESSAGE HERE"
+& "${CLAUDE_SKILL_DIR}\notify.ps1" "TITLE HERE" "MESSAGE HERE"
 ```
 
 - First argument is the title; the second is the body.
+- Optional third argument is the sound: an `ms-winsoundevent:*` URI played when the toast
+  appears. Defaults to `ms-winsoundevent:Notification.Default`. Pass an empty string (`""`)
+  for a silent toast. Other built-in options include `ms-winsoundevent:Notification.IM`,
+  `.Mail`, `.Reminder`, `.SMS`, and the looping `.Looping.Alarm` / `.Looping.Call` events.
+  ```powershell
+  & "${CLAUDE_SKILL_DIR}\notify.ps1" "Build done" "All checks passed" "ms-winsoundevent:Notification.IM"
+  ```
 - IMPORTANT: invoke this via the PowerShell tool, not Bash. The skill re-focuses the originating
   Windows Terminal tab by matching the console title against the tab names; running through Bash
   puts a `bash.exe` in the process tree that overwrites the console title, so the tab match fails

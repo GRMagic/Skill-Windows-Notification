@@ -6,7 +6,8 @@
 # so the skill is portable: just copy the folder, no separate setup step.
 param(
     [Parameter(Mandatory, Position = 0)][string]$Title,
-    [Parameter(Mandatory, Position = 1)][string]$Message
+    [Parameter(Mandatory, Position = 1)][string]$Message,
+    [Parameter(Position = 2)][AllowEmptyString()][string]$Sound = 'ms-winsoundevent:Notification.Default'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -99,4 +100,4 @@ Confirm-ToastAppId
 $ps51 = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
 $showScript = Join-Path $PSScriptRoot 'show-toast.ps1'
 & $ps51 -NoProfile -STA -ExecutionPolicy Bypass -File $showScript `
-    -Title $Title -Message $Message -Launch $launch -AppId $appId -Logo $logo
+    -Title $Title -Message $Message -Launch $launch -AppId $appId -Logo $logo -Sound $Sound
