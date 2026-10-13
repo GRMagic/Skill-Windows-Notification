@@ -55,17 +55,46 @@ function Confirm-ToastAppId {
     }
 }
 
-# Walk up the process tree from this script to the first ancestor that owns a real
-# window (the terminal hosting Claude Code). Its handle is what we focus on click.
+# Title and Windows Terminal window of the tab hosting this session. When fired from a Claude Code
+# tool, this script runs in a separate console (`claude → cmd.exe|bash → pwsh`), so read both from
+# the `claude` ancestor's console instead (it is the tab's console); see read-session-console.ps1.
+# Falls back to our own console title (and no window) when run by hand from a terminal.
+function Get-SessionConsole([int]$claudePid) {
+    if ($claudePid -gt 0) {
+        try {
+            $readScript = Join-Path $PSScriptRoot 'read-session-console.ps1'
+            $output = & (Get-Process -Id $PID).Path -NoProfile -ExecutionPolicy Bypass -File $readScript -TargetPid $claudePid
+            $windowPart, $titlePart = ([string]$output).Trim() -split ' ', 2
+            if ($titlePart) {
+                return [pscustomobject]@{
+                    Title  = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($titlePart))
+                    Window = [IntPtr][int64]$windowPart
+                }
+            }
+        } catch { }
+    }
+    return [pscustomobject]@{ Title = [Console]::Title; Window = [IntPtr]::Zero }
+}
+
+# Walk up the process tree from this script to the first ancestor that owns a real window (the
+# terminal hosting Claude Code); its handle is the fallback focus target. On the way, remember the
+# `claude` process: its console is the tab's console.
 $hwnd = [IntPtr]::Zero
+$claudePid = 0
 $proc = Get-Process -Id $PID
 while ($proc) {
+    if ($proc.ProcessName -eq 'claude') { $claudePid = $proc.Id }
     if ($proc.MainWindowHandle -ne 0) { $hwnd = $proc.MainWindowHandle; break }
     try {
         $parentId = (Get-CimInstance Win32_Process -Filter "ProcessId=$($proc.Id)" -ErrorAction Stop).ParentProcessId
         $proc = Get-Process -Id $parentId -ErrorAction Stop
     } catch { $proc = $null }
 }
+
+# One Windows Terminal process hosts all its windows, so MainWindowHandle is just the one highest in
+# the z-order (a minimized window drops to the back). The session console's owner is the exact one.
+$session = Get-SessionConsole $claudePid
+if ($session.Window -ne [IntPtr]::Zero) { $hwnd = $session.Window }
 
 $logo = Join-Path $PSScriptRoot 'claude-logo.png'
 
@@ -78,7 +107,7 @@ if ($canFocus) {
 
     # If this is a Windows Terminal tab, record which tab fired the toast so the click
     # can re-select it (the window handle alone only brings the whole window forward).
-    $myTitle = ConvertTo-NormTitle ([Console]::Title)
+    $myTitle = ConvertTo-NormTitle $session.Title
     if ($myTitle) {
         try {
             $tabs = Get-WtTabElements ([int]([int64]$hwnd))

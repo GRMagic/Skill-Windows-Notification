@@ -35,9 +35,9 @@ Invoke via PowerShell:
 ## How It Works
 
 1. **PowerShell Delegation** — When invoked in pwsh 7 (which lacks WinRT support), the script delegates to Windows PowerShell 5.1 for display
-2. **Protocol Registration** — On first run, registers the `claude-focus:` URL protocol under `HKCU\Software\Microsoft\Windows\CurrentVersion\App Paths` (no admin needed)
+2. **Protocol Registration** — On first run, registers the `claude-focus:` URL protocol under `HKCU\Software\Classes\claude-focus` (no admin needed)
 3. **AppUserModelId** — Creates a branded app identity (`Claude.Code.Notify`) so toasts display with the Claude logo
-4. **Tab Matching** — Uses UI Automation to match the console window title against Windows Terminal tab names, falling back to tab index
+4. **Window & Tab Matching** — Reads from the console of the `claude` ancestor process (tool commands run in their own console) both the tab title and the Windows Terminal window that owns that console. The window comes from the console's owner rather than `MainWindowHandle`, because one WT process hosts all its windows and `MainWindowHandle` is just the frontmost (wrong when ours is minimized). UI Automation then matches the title against that window's tab names, falling back to tab index
 5. **Focus Handler** — Clicking the toast invokes the `claude-focus:` handler, which refocuses the terminal and navigates to the correct tab
 
 ## Files
@@ -45,24 +45,15 @@ Invoke via PowerShell:
 - **notify.ps1** — Main entry point; delegates to `show-toast.ps1` and manages tab focusing
 - **show-toast.ps1** — Runs under Windows PowerShell 5.1; creates and displays the WinRT toast
 - **focus-window.ps1** — Handles the focus and tab-selection logic via UI Automation
-- **wt-helpers.ps1** — Windows Terminal integration utilities
+- **wt-helpers.ps1** — Windows Terminal integration utilities (title normalization, WT window enumeration, tab lookup)
+- **read-session-console.ps1** — Child process that attaches to the `claude` process's console and prints its owner window handle and its title (Base64, immune to the caller's code page)
 - **claude-logo.png** — Claude logo displayed on toasts
 
 ## Important Notes
 
-### Use PowerShell, Not Bash
+### Tab Title Comes From the `claude` Process
 
-Always invoke via the **PowerShell tool** (`pwsh`), never Bash:
-
-```powershell
-# ✅ Correct
-& "$env:USERPROFILE\.claude\skills\windows-notification\notify.ps1" "Title" "Message"
-
-# ❌ Wrong (Bash will break tab matching)
-bash -c 'powershell -Command "& \"%USERPROFILE%\.claude\skills\windows-notification\notify.ps1\" \"Title\" \"Message\""'
-```
-
-Running through Bash adds `bash.exe` to the process tree, which overwrites the console title and breaks the tab-matching logic.
+Claude Code runs tool commands in a separate console (`claude → cmd.exe|bash → pwsh`), so the script's own `[Console]::Title` is the shell path, never the tab title. `notify.ps1` therefore reads the title and the owning WT window of the `claude` ancestor's console via `read-session-console.ps1`; it falls back to its own console title and `MainWindowHandle` only when run by hand outside Claude Code. The title travels as Base64 because under Git Bash the console code page is cp850, which would garble the spinner glyph (`◐` → `Ôùæ`) and break the match. Prefer the PowerShell tool since the script is pwsh, but matching works from either tool.
 
 ### Timing
 
@@ -92,18 +83,21 @@ All operations are idempotent; running the script multiple times is safe.
 
 ### Notification doesn't appear
 
-- Ensure you're using the **PowerShell tool**, not Bash
 - Check Windows notifications are enabled in Settings > System > Notifications
 - Verify the script ran without errors in the terminal output
 
 ### Clicking notification focuses wrong tab
 
-- This indicates the script was run through Bash instead of PowerShell
-- Re-run using the PowerShell tool directly
+- The tab title could not be resolved, so the launch URI has no `?tab=` segment and the click only brings the window forward
+- Check that a `claude` process is an ancestor of the script and that `read-session-console.ps1` prints a non-zero window handle and a Base64 title for its PID
+
+### Clicking notification focuses the wrong window
+
+- With several Windows Terminal windows open, the launch URI's handle must be the owner of the `claude` console, not the WT process's `MainWindowHandle` — check the first field `read-session-console.ps1` prints
 
 ### Protocol registration fails
 
-- Ensure the user has write access to `HKCU\Software\Microsoft\Windows\CurrentVersion\App Paths`
+- Ensure the user has write access to `HKCU\Software\Classes\claude-focus`
 - Run the script as the same user that invoked it
 
 

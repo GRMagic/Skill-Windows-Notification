@@ -10,7 +10,7 @@ allowed-tools: PowerShell(& "${CLAUDE_SKILL_DIR}\notify.ps1":*)
 Send a native Windows toast via the WinRT `ToastNotificationManager`, always carrying the
 Claude logo. Clicking the toast brings the originating terminal window back to the foreground.
 
-Run it with the **PowerShell tool** (pwsh), never the Bash tool:
+Run it with the **PowerShell tool** (pwsh):
 
 ```powershell
 & "${CLAUDE_SKILL_DIR}\notify.ps1" "TITLE HERE" "MESSAGE HERE"
@@ -24,10 +24,10 @@ Run it with the **PowerShell tool** (pwsh), never the Bash tool:
   ```powershell
   & "${CLAUDE_SKILL_DIR}\notify.ps1" "Build done" "All checks passed" "ms-winsoundevent:Notification.IM"
   ```
-- IMPORTANT: invoke this via the PowerShell tool, not Bash. The skill re-focuses the originating
-  Windows Terminal tab by matching the console title against the tab names; running through Bash
-  puts a `bash.exe` in the process tree that overwrites the console title, so the tab match fails
-  and clicking the toast lands on the wrong tab (the window still comes forward).
+- Tab re-focus does not depend on which tool fires it: tool commands run in their own console
+  (`claude → cmd.exe|bash → pwsh`), so `notify.ps1` reads, via `read-session-console.ps1`, the
+  `claude` ancestor's console title (matched against the tab names) and the Windows Terminal window
+  that owns that console (so the right window is targeted even when it is minimized).
 - Clicking the notification focuses the terminal that fired it — and, in Windows Terminal,
   re-selects the exact tab that fired it (matched by tab title via UI Automation, falling
   back to the tab index). This works via a `claude-focus:` URL protocol that `notify.ps1`
